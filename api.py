@@ -1,106 +1,93 @@
-from flask import Flask, request, jsonify
-import requests
-import os
-from dotenv import load_dotenv
-from joblib import load
-from textblob import TextBlob
+import React, { useState } from 'react';
+import './App.css';
 
-# Initialize Flask app
-app = Flask(__name__)
+function App() {
+  // State to hold form data
+  const [formData, setFormData] = useState({
+    name: '',
+    address: '',
+    city: '',
+    state: '',
+    country: '',
+    zip_code: '',
+  });
 
-# Load the saved model and vectorizer 
-model = load('/Users/wnr/Downloads/yelp_dataset/LRM.joblib')
-vectorizer = load('/Users/wnr/Downloads/yelp_dataset/vectorizer.joblib')  # Update with the path to your saved vectorizer
+  // State to hold the API response
+  const [apiResponse, setApiResponse] = useState(null);
 
-# Load Yelp API key from .env file
-load_dotenv()
-yelp_api_key = os.getenv("YELP_API_KEY")
+  // Function to update state on input change
+  const handleInputChange = (e) => {
+    const { id, value } = e.target;
+    setFormData({ ...formData, [id]: value });
+  };
 
-sentiment_mapping = {
-    'Very Negative': -2,
-    'Negative': -1,
-    'Neutral': 0,
-    'Positive': 1,
-    'Very Positive': 2
+  // Function to handle form submission
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch('http://127.0.0.1:5000/analyze_business', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        setApiResponse(data); // Update the state with the received data
+      } else {
+        alert("Error from API: ", data.error);
+      }
+    } catch (error) {
+      alert('Error:', error);
+    }
+  };
+
+  return (
+    <div className="App">
+      <header className="App-header">
+        <form className='inputs' onSubmit={handleSubmit}>
+          <label htmlFor="name">Name</label><br />
+          <input type='text' id='name' value={formData.name} onChange={handleInputChange} required/><br />
+
+          <label htmlFor="address">Address</label><br />
+          <input type='text' id='address' value={formData.address} onChange={handleInputChange} required/><br />
+
+          <label htmlFor="city">City</label><br />
+          <input type='text' id='city' value={formData.city} onChange={handleInputChange} required/><br />
+
+          <label htmlFor="state">State</label><br />
+          <input type='text' id='state' value={formData.state} onChange={handleInputChange} required/><br />
+
+          <label htmlFor="country">Country</label><br />
+          <input type='text' id='country' value={formData.country} onChange={handleInputChange} required/><br />
+
+          <label htmlFor="zip_code">Zip Code</label><br />
+          <input type='text' id='zip_code' value={formData.zip_code} onChange={handleInputChange} required/><br />
+
+          <button type='submit'>Submit</button>
+        </form>
+
+        {apiResponse && (
+        <div className="api-response">
+          <h2>API Response</h2>
+          <p className="overall-score"><strong>Overall Score:</strong> {apiResponse.overall_score}</p>
+          <h3>Reviews:</h3>
+          <ul className="reviews-list">
+            {apiResponse.reviews.map((review, index) => (
+              <li key={index} className="review-item">
+                <p><strong>Review:</strong> {review.review}</p>
+                <p><strong>Aggregate Score:</strong> {review.aggregate_score}</p>
+                <p><strong>Sentiment Score:</strong> {review.sentiment_score}</p>
+                <p><strong>Subjectivity Score:</strong> {review.subjectivity_score}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </header>
+  </div>
+  );
 }
 
-def find_business(name, address, city, state, country, zip_code, yelp_api_key):
-    """Find a business on Yelp using the provided details."""
-    yelp_url = "https://api.yelp.com/v3/businesses/matches"
-    headers = {'Authorization': f'Bearer {yelp_api_key}'}
-    params = {
-        "name": name,
-        "address1": address,
-        "city": city,
-        "state": state,
-        "country": country,
-        "zip_code": zip_code,
-        "match_threshold": "default"
-    }
-
-    response = requests.get(yelp_url, headers=headers, params=params)
-    if response.status_code == 200:
-        businesses = response.json().get('businesses', [])
-        if businesses:
-            return businesses[0]['id']
-    return None
-
-def get_reviews(business_id, yelp_api_key):
-    """Get reviews for a business given its Yelp Business ID."""
-    reviews_url = f"https://api.yelp.com/v3/businesses/{business_id}/reviews"
-    headers = {'Authorization': f'Bearer {yelp_api_key}'}
-
-    response = requests.get(reviews_url, headers=headers)
-    if response.status_code == 200:
-        return response.json().get('reviews', [])
-    return []
-
-def analyze_review_sentiment(review):
-    """Analyze the sentiment of a review."""
-    processed_text = vectorizer.transform([review])
-    sentiment_label = model.predict(processed_text)[0]
-    sentiment_score = sentiment_mapping.get(sentiment_label, 0)  # Default to 0 if label not found
-    return sentiment_score
-
-def calculate_aggregate_score(sentiment_score, subjectivity_score, star_rating=3):
-    """Calculate the aggregate score for a review."""
-    normalized_star_rating = star_rating - 3  # Normalize star rating to -2 to 2 scale
-    weight = 1 - subjectivity_score if sentiment_score > 0 else 1
-    return (sentiment_score * weight + normalized_star_rating) / 2
-
-@app.route('/analyze_business', methods=['POST'])
-def analyze_business():
-    data = request.json
-    name = data['name']
-    address = data['address']
-    city = data['city']
-    state = data['state']
-    country = data['country']
-    zip_code = data['zip_code']
-
-    business_id = find_business(name, address, city, state, country, zip_code, yelp_api_key)
-    if business_id:
-        yelp_reviews = get_reviews(business_id, yelp_api_key)
-        analyzed_reviews = []
-
-        for review_data in yelp_reviews:
-            review_text = review_data['text']
-            sentiment_score = analyze_review_sentiment(review_text)
-            subjectivity_score = TextBlob(review_text).sentiment.subjectivity
-            aggregate_score = calculate_aggregate_score(sentiment_score, subjectivity_score)
-
-            analyzed_reviews.append({
-                "review": review_text,
-                "sentiment_score": sentiment_score,
-                "subjectivity_score": subjectivity_score,
-                "aggregate_score": aggregate_score
-            })
-
-        overall_score = sum(review['aggregate_score'] for review in analyzed_reviews) / len(analyzed_reviews)
-        return jsonify({"overall_score": overall_score, "reviews": analyzed_reviews})
-
-    else:
-        return jsonify({"error": "Business not found"}), 404
-
-if __name__ == '__main__':
-    app.run(debug=True)
+export default App;
