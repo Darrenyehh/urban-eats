@@ -4,13 +4,15 @@ import os
 from dotenv import load_dotenv
 from joblib import load
 from textblob import TextBlob
+from flask_cors import CORS
 
 # Initialize Flask app
 app = Flask(__name__)
+CORS(app)
 
 # Load the saved model and vectorizer 
-model = load('/Users/wnr/Downloads/yelp_dataset/LRM.joblib')
-vectorizer = load('/Users/wnr/Downloads/yelp_dataset/vectorizer.joblib')  # Update with the path to your saved vectorizer
+model = load('\\Users\\Owner\\Desktop\\Stuff\\learn\\urban-eats\\LRM.joblib')
+vectorizer = load('\\Users\\Owner\\Desktop\\Stuff\\learn\\urban-eats\\vectorizer.joblib')  # Update with the path to your saved vectorizer
 
 # Load Yelp API key from .env file
 load_dotenv()
